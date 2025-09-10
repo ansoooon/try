@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Revision Calendar + DSE Countdown</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --fg:#1f2937;
+    --muted:#6b7280;
+    --accent:#2563eb;
+    --holiday:#dc2626;
+    --sun:#ea580c;
+    --sat:#0ea5e9;
+    --grid:#e5e7eb;
+    --chip:#f3f4f6;
+    --ok:#16a34a;
+    --warn:#b45309;
+    --purple:#7c3aed;
+    --font: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", "PingFang HK", "PingFang SC", "Heiti TC", "Microsoft JhengHei", Arial, sans-serif;
+  }
+  html,body{background:var(--bg);color:var(--fg);font-family:var(--font);margin:0;padding:0;}
+  .app{
+    max-width:1000px;margin:0 auto;padding:16px 12px 80px;
+  }
+
+  /* Countdown block */
+  .countdown-wrap{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    border:1px solid var(--grid);border-radius:12px;padding:14px 12px;background:#f8fafc;margin-bottom:12px;
+  }
+  .countdown-title{
+    font-weight:800;color:var(--fg);font-size:18px;
+  }
+  .countdown{
+    font-weight:900;line-height:1.1;color:var(--accent);
+    font-size:56px;letter-spacing:-0.5px;
+  }
+  .countdown-sub{
+    font-size:13px;color:var(--muted);
+  }
+
+  header{
+    display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;margin-bottom:16px;
+  }
+  .title{
+    font-size:20px;font-weight:700;line-height:1.2;
+  }
+  .controls{
+    display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;
+  }
+  select, button, input[type="checkbox"]{font:inherit;}
+  select, button{
+    padding:8px 10px;border:1px solid var(--grid);border-radius:8px;background:#fff;cursor:pointer;
+  }
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .legend{
+    display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px;color:var(--muted);
+  }
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:var(--chip);border:1px solid var(--grid);}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.holiday{background:var(--holiday);}
+  .dot.sun{background:var(--sun);}
+  .dot.sat{background:var(--sat);}
+  .dot.period{background:var(--accent);}
+  .dot.special{background:var(--purple);}
+  .toggle{display:inline-flex;align-items:center;gap:8px;}
+  .calendar{
+    width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid var(--grid);border-radius:12px;overflow:hidden;background:#fff;
+  }
+  .calendar thead th{
+    position:sticky;top:0;background:#f8fafc;color:var(--muted);font-weight:600;font-size:12px;padding:10px;border-bottom:1px solid var(--grid);
+  }
+  .calendar tbody td{
+    vertical-align:top;border-right:1px solid var(--grid);border-bottom:1px solid var(--grid);height:130px;padding:8px;
+  }
+  .calendar tbody td:last-child{border-right:none;}
+  .dayhead{
+    display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:6px;
+  }
+  .date{font-weight:700;}
+  .holiday-label{color:var(--holiday);font-weight:600;font-size:12px;}
+  .weekday-label{color:var(--muted);font-size:11px;}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .tag{
+    font-size:11px;border:1px solid var(--grid);padding:2px 6px;border-radius:6px;background:var(--chip);
+    white-space:nowrap;
+  }
+  .tag.holiday{border-color:var(--holiday);color:var(--holiday);background:#fff5f5;}
+  .tag.template{border-color:var(--accent);color:var(--accent);background:#f0f6ff;}
+  .tag.special{border-color:var(--purple);color:var(--purple);background:#f7f2ff;}
+  .tasks{margin-top:6px;font-size:11px;line-height:1.35;color:#111827;}
+  .tasks div{margin-bottom:2px;}
+  .sun td{background:linear-gradient(0deg, rgba(234,88,12,0.06), rgba(234,88,12,0.06)) , #fff;}
+  .sat td{background:linear-gradient(0deg, rgba(14,165,233,0.06), rgba(14,165,233,0.06)) , #fff;}
+  @media print{
+    @page{size:A4 portrait;margin:12mm;}
+    header {position:fixed;top:0;left:0;right:0;background:#fff;padding:8px 12px;border-bottom:1px solid var(--grid);}
+    .app{padding-top:110px;padding-bottom:0;}
+    .controls .btns, .legend .runtime {display:none !important;}
+    .calendar tbody td{height:120px;}
+    .countdown-wrap{margin-top:58px;}
+  }
+  @media (max-width:700px){
+    .calendar thead th{font-size:11px;padding:8px;}
+    .calendar tbody td{height:120px;padding:6px;}
+    .tasks{font-size:10px;}
+    .countdown{font-size:44px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Countdown -->
+  <div class="countdown-wrap" aria-live="polite">
+    <div>
+      <div class="countdown-title">You still have</div>
+      <div id="countdownDays" class="countdown" aria-label="Days remaining to DSE">--</div>
+      <div class="countdown-sub">days till the DSE (Target: 2026-04-08, HKT).</div>
+    </div>
+    <div class="controls" style="margin-left:auto;">
+      <button id="todayBtnTop">Jump to This Month</button>
+    </div>
+  </div>
+
+  <header>
+    <div class="title">
+      Revision Calendar (to Dec 2025)
+      <div style="font-size:12px;color:var(--muted);font-weight:500;">Timezone: HKT (UTC+8). Tue--Thu default = Table 1. Toggle below for extra classes.</div>
+    </div>
+    <div class="controls">
+      <label><select id="yearSelect" aria-label="Year"></select></label>
+      <label><select id="monthSelect" aria-label="Month"></select></label>
+      <label class="toggle" title="Use Table 2 on Tue--Thu (補課)">
+        <input type="checkbox" id="toggleExtra" />
+        <span>Tue--Thu 補課 (Table 2)</span>
+      </label>
+      <div class="btns" style="display:flex;gap:8px;">
+        <button class="primary" id="printBtn">Print / Save PDF</button>
+        <button id="todayBtn">Jump to This Month</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="legend" style="margin-bottom:10px;">
+    <span class="badge"><span class="dot holiday"></span>HK Public Holiday</span>
+    <span class="badge"><span class="dot period"></span>Study Template Applied</span>
+    <span class="badge"><span class="dot special"></span>Override: Special (Table 5)</span>
+    <span class="badge"><span class="dot sun"></span>Sunday</span>
+    <span class="badge"><span class="dot sat"></span>Saturday</span>
+    <span class="runtime">Print tip: enable “Background graphics”.</span>
+  </div>
+
+  <table class="calendar" aria-label="Monthly calendar">
+    <thead><tr id="weekdayHeader"></tr></thead>
+    <tbody id="calendarBody"></tbody>
+  </table>
+
+  <section style="margin-top:18px;">
+    <h3 style="margin:8px 0 6px;font-size:16px;">Daily Templates (摘要)</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Holiday</div>
+        <div style="font-size:12px;color:var(--muted);">(13.5h)</div>
+        <div class="tasks" aria-label="Holiday tasks">
+          <div>8:00--12:00 Period 1</div>
+          <div>12:00--1:00 Lunch</div>
+          <div>1:00--5:00 Period 2</div>
+          <div>5:00--5:30 Short Break</div>
+          <div>5:30--8:00 Period 3</div>
+          <div>8:00--9:00 Dinner</div>
+          <div>9:00--12:00 Period 4</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Table 1 (Tue--Thu, no extra class)</div>
+        <div style="font-size:12px;color:var(--muted);">(6.5h)</div>
+        <div class="tasks">
+          <div>4:00--4:30 Rest</div>
+          <div>4:30--7:30 Period 1</div>
+          <div>7:30--8:30 Dinner</div>
+          <div>8:30--12:00 Period 2</div>
+          <div>12:30--1:30 Optional</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Table 2 (Tue--Thu, extra class)</div>
+        <div style="font-size:12px;color:var(--muted);">(5.5h)</div>
+        <div class="tasks">
+          <div>5:00--5:30 Rest</div>
+          <div>5:30--7:30 Period 1</div>
+          <div>7:30--8:30 Dinner</div>
+          <div>8:30--12:00 Period 2</div>
+          <div>12:30--1:30 Optional</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Table 3 (Monday)</div>
+        <div class="tasks">
+          <div>5:30--6:30 搭車</div>
+          <div>6:30--8:30 補習</div>
+          <div>8:30--9:30 搭車</div>
+          <div>9:30--10:30 Dinner</div>
+          <div>10:30--1:00 Period 1</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Table 4 (Friday)</div>
+        <div style="font-size:12px;color:var(--muted);">(5.5--6.5h)</div>
+        <div class="tasks">
+          <div>4:00--4:30 Rest</div>
+          <div>4:30--5:30 Period 1（補課例外）</div>
+          <div>5:30--6:00 搭車</div>
+          <div>6:00--7:30 補習</div>
+          <div>7:30--8:00 搭車</div>
+          <div>8:00--9:00 Dinner</div>
+          <div>9:00--10:00 Friday Rest</div>
+          <div>10:00--12:00 Period 1</div>
+          <div>12:00--2:00 Period 2</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--purple);">Table 5 (Special)</div>
+        <div class="tasks">
+          <div>Custom special schedule (to be defined)</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Saturday</div>
+        <div class="tasks">
+          <div>彈性調整（備註：我 12:00 瞓）</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--grid);border-radius:10px;padding:10px;">
+        <div style="font-weight:700;color:var(--accent);">Sunday</div>
+        <div style="font-size:12px;color:var(--muted);">(11.5--12.5h)</div>
+        <div class="tasks">
+          <div>8:00--10:30 Period 1</div>
+          <div>10:30--11:00 Rest</div>
+          <div>11:00--12:30 補習</div>
+          <div>12:30--1:30 Lunch</div>
+          <div>1:30--4:30 Period 2</div>
+          <div>4:30--5:00 Rest</div>
+          <div>5:00--7:00 Period 3</div>
+          <div>7:00--8:00 Dinner</div>
+          <div>8:00--11:00 Period 4</div>
+          <div>11:00--12:00 Optional</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/*
+  Revision Calendar + DSE Countdown
+  - Adds large countdown to 2026-04-08 (HKT)
+  - Calendar content retained (to Dec 2025)
+  - HK public holidays 2024--2025
+  - Templates applied by weekday and holidays
+  - Toggle Tue--Thu extra class (Table 2)
+  - Print-friendly monthly view
+  Timezone: HKT (UTC+8)
+*/
+
+const STARTS_ON_SUN = true;
+const weekdayNames = STARTS_ON_SUN
+  ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
+  : ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+// HK public holidays 2024--2025
+const hkHolidays = {
+  // 2024
+  "2024-01-01":"The First Day of January",
+  "2024-02-10":"Lunar New Year’s Day",
+  "2024-02-11":"The Second Day of Lunar New Year",
+  "2024-02-12":"The Third Day of Lunar New Year",
+  "2024-02-13":"The Fourth Day of Lunar New Year (Substitute)",
+  "2024-03-29":"Good Friday",
+  "2024-03-30":"The Day Following Good Friday",
+  "2024-04-01":"Easter Monday",
+  "2024-04-04":"Ching Ming Festival",
+  "2024-05-01":"Labour Day",
+  "2024-05-15":"The Birthday of the Buddha",
+  "2024-06-10":"Tuen Ng Festival (Dragon Boat)",
+  "2024-07-01":"HKSAR Establishment Day",
+  "2024-09-18":"The Day Following Mid-Autumn Festival",
+  "2024-10-01":"National Day",
+  "2024-10-11":"Chung Yeung Festival",
+  "2024-12-25":"Christmas Day",
+  "2024-12-26":"The First Weekday After Christmas Day",
+  // 2025
+  "2025-01-01":"The First Day of January",
+  "2025-01-29":"Lunar New Year’s Day",
+  "2025-01-30":"The Second Day of Lunar New Year",
+  "2025-01-31":"The Third Day of Lunar New Year",
+  "2025-04-04":"Ching Ming Festival",
+  "2025-04-18":"Good Friday",
+  "2025-04-19":"The Day Following Good Friday",
+  "2025-04-21":"Easter Monday",
+  "2025-05-01":"Labour Day",
+  "2025-05-05":"The Birthday of the Buddha",
+  "2025-05-31":"Tuen Ng Festival (falls Sat; Mon 2 Jun is holiday)",
+  "2025-06-02":"Tuen Ng Festival (Substitute Holiday)",
+  "2025-07-01":"HKSAR Establishment Day",
+  "2025-10-01":"National Day",
+  "2025-10-06":"Chung Yeung Festival",
+  "2025-12-25":"Christmas Day",
+  "2025-12-26":"The First Weekday After Christmas Day"
+};
+
+function pad(n){return n<10?`0${n}`:`${n}`;}
+function fmtDate(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+function ymd(y,m,d){return `${y}-${pad(m+1)}-${pad(d)}`;}
+function isHolidayISO(iso){return Object.prototype.hasOwnProperty.call(hkHolidays, iso);}
+
+// Manual overrides provided earlier (2024 set kept), plus NEW 2025 overrides per request
+const specialISO = new Set([
+  // 2024
+  "2024-10-03","2024-12-01","2024-12-02","2024-12-03","2024-12-19",
+  // 2025 (new): 3/10, 1/12, 2/12, 3/12, 19/12 -> Table 5 (Special)
+  "2025-10-03","2025-12-01","2025-12-02","2025-12-03","2025-12-19"
+]);
+
+const schoolHolidaySingles = new Set([
+  // 2024
+  "2024-10-06","2024-10-07","2024-11-17","2024-12-04","2024-12-05","2024-12-08","2024-10-29",
+  // 2025 (new): 6/10, 7/10, 17/11, 4/12, 5/12, 8/12, 29/10 -> School Holiday (use Holiday template)
+  "2025-10-06","2025-10-07","2025-11-17","2025-12-04","2025-12-05","2025-12-08","2025-10-29"
+]);
+
+// 2024 existing range, plus 2025 new range: 22/12/2025 - 01/01/2026
+const schoolHolidayRanges = [
+  { start:"2024-12-22", end:"2025-01-01" },
+  { start:"2025-12-22", end:"2026-01-01" }
+];
+
+function isInRange(iso, range){
+  return iso >= range.start && iso <= range.end;
+}
+function isSchoolHoliday(iso){
+  if (schoolHolidaySingles.has(iso)) return true;
+  return schoolHolidayRanges.some(r=>isInRange(iso, r));
+}
+
+// Templates
+const Templates = {
+  Holiday: {
+    name:"Holiday", badge:"Holiday", lines:[
+      "8:00--12:00 Period 1",
+      "12:00--1:00 Lunch",
+      "1:00--5:00 Period 2",
+      "5:00--5:30 Short Break",
+      "5:30--8:00 Period 3",
+      "8:00--9:00 Dinner",
+      "9:00--12:00 Period 4"
+    ]
+  },
+  Table1: {
+    name:"Table 1 (Tue--Thu, no extra class)", badge:"Table 1", lines:[
+      "4:00--4:30 Rest",
+      "4:30--7:30 Period 1",
+      "7:30--8:30 Dinner",
+      "8:30--12:00 Period 2",
+      "12:30--1:30 Optional"
+    ]
+  },
+  Table2: {
+    name:"Table 2 (Tue--Thu, extra class)", badge:"Table 2", lines:[
+      "5:00--5:30 Rest",
+      "5:30--7:30 Period 1",
+      "7:30--8:30 Dinner",
+      "8:30--12:00 Period 2",
+      "12:30--1:30 Optional"
+    ]
+  },
+  Table3: {
+    name:"Table 3 (Monday)", badge:"Table 3", lines:[
+      "5:30--6:30 搭車",
+      "6:30--8:30 補習",
+      "8:30--9:30 搭車",
+      "9:30--10:30 Dinner",
+      "10:30--1:00 Period 1"
+    ]
+  },
+  Table4: {
+    name:"Table 4 (Friday)", badge:"Table 4", lines:[
+      "4:00--4:30 Rest",
+      "4:30--5:30 Period 1（補課例外）",
+      "5:30--6:00 搭車",
+      "6:00--7:30 補習",
+      "7:30--8:00 搭車",
+      "8:00--9:00 Dinner",
+      "9:00--10:00 Friday Rest",
+      "10:00--12:00 Period 1",
+      "12:00--2:00 Period 2"
+    ]
+  },
+  Table5: {
+    name:"Table 5 (Special)", badge:"Table 5", lines:[
+      "Special day schedule (請稍後提供詳情)"
+    ]
+  },
+  Saturday: {
+    name:"Saturday (Flexible)", badge:"Saturday", lines:[
+      "彈性調整（備註：我 12:00 瞓）"
+    ]
+  },
+  Sunday: {
+    name:"Sunday", badge:"Sunday", lines:[
+      "8:00--10:30 Period 1",
+      "10:30--11:00 Rest",
+      "11:00--12:30 補習",
+      "12:30--1:30 Lunch",
+      "1:30--4:30 Period 2",
+      "4:30--5:00 Rest",
+      "5:00--7:00 Period 3",
+      "7:00--8:00 Dinner",
+      "8:00--11:00 Period 4",
+      "11:00--12:00 Optional"
+    ]
+  }
+};
+
+// State
+const state = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth(),
+  tueThuExtra: false
+};
+
+function populateSelectors(){
+  const yearSel = document.getElementById('yearSelect');
+  const monthSel = document.getElementById('monthSelect');
+  yearSel.innerHTML = '';
+  monthSel.innerHTML = '';
+
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  const end = new Date(2025, 11, 1);
+
+  const years = new Set();
+  let cur = new Date(start);
+  while(cur <= end){
+    years.add(cur.getFullYear());
+    cur.setMonth(cur.getMonth()+1);
+  }
+  [...years].sort((a,b)=>a-b).forEach(y=>{
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y;
+    yearSel.appendChild(opt);
+  });
+
+  for(let m=0;m<12;m++){
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = new Date(2000,m,1).toLocaleString('en-US',{month:'long'});
+    monthSel.appendChild(opt);
+  }
+
+  const clamp = (d)=>{
+    if (d.getFullYear()>2025 || (d.getFullYear()===2025 && d.getMonth()>11)){
+      return new Date(2025,11,1);
+    }
+    return d;
+  };
+  const init = clamp(today);
+  state.year = init.getFullYear();
+  state.month = init.getMonth();
+
+  yearSel.value = state.year;
+  monthSel.value = state.month;
+
+  yearSel.addEventListener('change', ()=>{
+    state.year = parseInt(yearSel.value,10);
+    render();
+  });
+  monthSel.addEventListener('change', ()=>{
+    state.month = parseInt(monthSel.value,10);
+    render();
+  });
+
+  document.getElementById('toggleExtra').addEventListener('change', (e)=>{
+    state.tueThuExtra = e.target.checked;
+    render();
+  });
+
+  document.getElementById('printBtn').addEventListener('click', ()=>{ window.print(); });
+  const jumpNow = ()=>{
+    const now = new Date();
+    const clampNow = (now.getFullYear()>2025 || (now.getFullYear()===2025 && now.getMonth()>11))
+      ? new Date(2025,11,1) : now;
+    state.year = clampNow.getFullYear();
+    state.month = clampNow.getMonth();
+    yearSel.value = state.year;
+    monthSel.value = state.month;
+    render();
+  };
+  document.getElementById('todayBtn').addEventListener('click', jumpNow);
+  document.getElementById('todayBtnTop').addEventListener('click', jumpNow);
+}
+
+function setupWeekdayHeader(){
+  const tr = document.getElementById('weekdayHeader');
+  tr.innerHTML = '';
+  const names = weekdayNames;
+  names.forEach((name)=>{
+    const th = document.createElement('th');
+    th.textContent = name;
+    tr.appendChild(th);
+  });
+}
+
+// Determine template (with overrides)
+// Priority: Manual overrides > School holiday > HK public holiday > weekday rules
+function getTemplateForDate(d, useExtra){
+  const iso = fmtDate(d);
+  const w = d.getDay(); // 0 Sun - 6 Sat
+
+  // Manual overrides (Special)
+  if (specialISO.has(iso)){
+    return { template: Templates.Table5, tags: ["Special Override"], special:true, schoolHoliday:false, hkHoliday:false };
+  }
+
+  // School holiday (use Holiday template)
+  if (isSchoolHoliday(iso)){
+    return { template: Templates.Holiday, tags: ["School Holiday"], special:false, schoolHoliday:true, hkHoliday:false };
+  }
+
+  // HK Public Holiday
+  if (isHolidayISO(iso)){
+    return { template: Templates.Holiday, tags: ["HK Public Holiday"], special:false, schoolHoliday:false, hkHoliday:true };
+  }
+
+  // Weekday rules
+  if (w===0) return { template: Templates.Sunday, tags: ["Sunday"] };
+  if (w===1) return { template: Templates.Table3, tags: ["Monday","Table 3"] };
+  if (w>=2 && w<=4){
+    return useExtra
+      ? { template: Templates.Table2, tags: ["Tue--Thu","Table 2"] }
+      : { template: Templates.Table1, tags: ["Tue--Thu","Table 1"] };
+  }
+  if (w===5) return { template: Templates.Table4, tags: ["Friday","Table 4"] };
+  if (w===6) return { template: Templates.Saturday, tags: ["Saturday"] };
+  return { template: null, tags: [] };
+}
+
+function render(){
+  const tbody = document.getElementById('calendarBody');
+  tbody.innerHTML = '';
+
+  const y = state.year, m = state.month;
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m+1, 0);
+  const daysInMonth = last.getDate();
+
+  let startOffset = first.getDay(); // 0 Sun
+  if (!STARTS_ON_SUN){ startOffset = (startOffset+6)%7; }
+
+  let day = 1;
+  for (let week=0; week<6; week++){
+    const tr = document.createElement('tr');
+    for (let wd=0; wd<7; wd++){
+      const td = document.createElement('td');
+      const inMonth = (week>0 || wd>=startOffset) && day<=daysInMonth;
+      if (inMonth){
+        const current = new Date(y, m, day);
+        const iso = fmtDate(current);
+        const w = current.getDay();
+        const isSun = w===0;
+        const isSat = w===6;
+
+        // Head
+        const head = document.createElement('div');
+        head.className = 'dayhead';
+        const left = document.createElement('div');
+        left.innerHTML = `<span class="date">${day}</span> <span class="weekday-label">${weekdayNames[w]}</span>`;
+        head.appendChild(left);
+
+        // Holiday flag on header if HK holiday
+        if (isHolidayISO(iso)){
+          const right = document.createElement('div');
+          right.className = 'holiday-label';
+          right.textContent = 'HK Holiday';
+          head.appendChild(right);
+        }
+        td.appendChild(head);
+
+        // Tags
+        const tags = document.createElement('div');
+        tags.className = 'tags';
+
+        // Manual override tags
+        if (specialISO.has(iso)){
+          const t = document.createElement('span');
+          t.className = 'tag special';
+          t.textContent = 'Special (Table 5)';
+          tags.appendChild(t);
+        }
+        if (isSchoolHoliday(iso)){
+          const t = document.createElement('span');
+          t.className = 'tag holiday';
+          t.textContent = 'School Holiday';
+          tags.appendChild(t);
+        }
+
+        // HK holiday tag with name
+        if (isHolidayISO(iso)){
+          const t = document.createElement('span');
+          t.className = 'tag holiday';
+          t.title = hkHolidays[iso];
+          t.textContent = hkHolidays[iso];
+          tags.appendChild(t);
+        }
+
+        const { template, tags: tmplTags } = getTemplateForDate(current, state.tueThuExtra);
+        if (template){
+          const t = document.createElement('span');
+          t.className = specialISO.has(iso) ? 'tag special' : 'tag template';
+          t.textContent = template.badge;
+          tags.appendChild(t);
+          tmplTags.forEach(label=>{
+            const tt = document.createElement('span');
+            tt.className = 'tag';
+            tt.textContent = label;
+            tags.appendChild(tt);
+          });
+        }
+
+        td.appendChild(tags);
+
+        // Lines
+        if (template){
+          const tasks = document.createElement('div');
+          tasks.className = 'tasks';
+          template.lines.forEach(line=>{
+            const div = document.createElement('div');
+            div.textContent = line;
+            tasks.appendChild(div);
+          });
+          td.appendChild(tasks);
+        }
+
+        // Weekend tint
+        if (isSun){
+          td.style.background = 'linear-gradient(0deg, rgba(234,88,12,0.06), rgba(234,88,12,0.06)) , #fff';
+        } else if (isSat){
+          td.style.background = 'linear-gradient(0deg, rgba(14,165,233,0.06), rgba(14,165,233,0.06)) , #fff';
+        }
+
+        day++;
+      } else {
+        td.style.background = '#fbfbfb';
+      }
+      tr.appendChild(td);
+    }
+    document.getElementById('calendarBody').appendChild(tr);
+    if (day>daysInMonth) break;
+  }
+
+  // Sync selects
+  const yearSel = document.getElementById('yearSelect');
+  const monthSel = document.getElementById('monthSelect');
+  if (yearSel.value != y) yearSel.value = y;
+  if (monthSel.value != m) monthSel.value = m;
+}
+
+// Countdown (HKT) to 2026-04-08
+function startCountdown(){
+  const el = document.getElementById('countdownDays');
+
+  // Target: start of 2026-04-08 HKT (00:00 HKT) = 2026-04-07 16:00 UTC
+  const targetHKT_UTC = Date.UTC(2026, 3, 7, 16, 0, 0);
+
+  function update(){
+    const now = new Date();
+    const diffMs = targetHKT_UTC - now.getTime();
+    const dayMs = 24*60*60*1000;
+    let days = Math.ceil(diffMs / dayMs);
+    if (days < 0) days = 0;
+    el.textContent = days.toString();
+  }
+
+  update();
+  const interval = setInterval(update, 60*1000);
+  window.addEventListener('beforeunload', ()=>clearInterval(interval));
+}
+
+// Init
+(function init(){
+  setupWeekdayHeader();
+  populateSelectors();
+  render();
+  startCountdown();
+})();
+</script>
+</body>
+</html>
